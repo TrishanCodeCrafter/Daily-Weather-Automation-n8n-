@@ -1,0 +1,384 @@
+{
+  "name": "weather_automation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "58baae51-4ae8-401c-a2b4-6155a5698aee",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n/* ---------- Helpers ---------- */\n\nfunction toTitleCase(str = '') {\n  return str\n    .toLowerCase()\n    .split(/\\s+/)\n    .map(word => word.charAt(0).toUpperCase() + word.slice(1))\n    .join(' ');\n}\n\nfunction getTempEmoji(temp) {\n  if (temp >= 35) return '🥵';\n  if (temp >= 25) return '🔥';\n  if (temp >= 15) return '😊';\n  if (temp >= 5)  return '🌤️';\n  if (temp >= 0)  return '🧥';\n  return '❄️';\n}\n\nfunction getTempGradient(temp) {\n  if (temp >= 35) return 'linear-gradient(90deg, #ff5252, #d32f2f)';\n  if (temp >= 25) return 'linear-gradient(90deg, #ff9800, #f57c00)';\n  if (temp >= 15) return 'linear-gradient(90deg, #4caf50, #388e3c)';\n  if (temp >= 5)  return 'linear-gradient(90deg, #42a5f5, #1976d2)';\n  return 'linear-gradient(90deg, #7e57c2, #512da8)';\n}\n\n// Normalize temp (-10°C → 0%, 40°C → 100%)\nfunction getTempBarWidth(temp) {\n  const min = -10;\n  const max = 40;\n  const clamped = Math.min(Math.max(temp, min), max);\n  return ((clamped - min) / (max - min)) * 100;\n}\n\n/* ---------- Main ---------- */\n\nreturn items.map(item => {\n  const data = item.json;\n\n  const city = data.name;\n  const temp = data.main.temp;\n  const humidity = data.main.humidity;\n  const wind = data.wind.speed;\n  const condition = toTitleCase(data.weather[0].description);\n\n  let alertType = 'none';\n  const precipitationRegex = /rain|snow|drizzle|storm|thunder/i;\n\n  if (precipitationRegex.test(condition)) {\n    alertType = 'precipitation alert';\n  } else if (temp > 32) {\n    alertType = 'heat alert';\n  } else if (temp < 0) {\n    alertType = 'frost alert';\n  }\n\n  const alertBgColor = alertType === 'none' ? '#e8f5e9' : '#ffebee';\n  const tempEmoji = getTempEmoji(temp);\n  const tempGradient = getTempGradient(temp);\n  const tempBarWidth = getTempBarWidth(temp).toFixed(0);\n\n  /* ---------- HTML Email ---------- */\n\n  const summary = `\n<div style=\"font-family: Arial, sans-serif; max-width: 420px; border: 1px solid #eee; padding: 20px; border-radius: 12px;\">\n  <h2 style=\"color: #333; margin-top: 0;\">\n    Weather Report: ${city} 📍\n  </h2>\n\n  <p style=\"font-size: 22px; margin: 10px 0;\">\n    <strong>${temp}°C</strong> ${tempEmoji}\n  </p>\n\n  <!-- Temperature Gradient Bar -->\n  <div style=\"background: #eee; border-radius: 10px; height: 10px; overflow: hidden; margin-bottom: 15px;\">\n    <div style=\"\n      width: ${tempBarWidth}%;\n      height: 100%;\n      background: ${tempGradient};\n    \"></div>\n  </div>\n\n  <p><strong>Conditions:</strong> ${condition}</p>\n  <p><strong>Humidity:</strong> ${humidity}% 💧</p>\n  <p><strong>Wind Speed:</strong> ${wind} m/s 🍃</p>\n\n  <div style=\"background: ${alertBgColor}; padding: 10px; border-radius: 6px; margin-top: 15px;\">\n    <strong>Alert:</strong> ${alertType.toUpperCase()} ⚠️\n  </div>\n\n  <p style=\"font-size: 10px; color: #999; margin-top: 20px;\">\n    System: <em>n8n Automated Node</em> | Instance: <em>Docker-Local</em>\n  </p>\n</div>\n`.trim();\n\n  return {\n    json: {\n      city,\n      temperature: temp,\n      temperature_unit: 'Celsius',\n      condition,\n      humidity,\n      wind_speed: wind,\n      alert_type: alertType,\n      summary,\n      raw_response: data\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        0
+      ],
+      "id": "b610c57c-c0e7-4438-a1ed-0e82be70d48a",
+      "name": "Process Logic"
+    },
+    {
+      "parameters": {
+        "tableId": "weather_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "city",
+              "fieldValue": "={{ $json.city }}"
+            },
+            {
+              "fieldId": "temperature",
+              "fieldValue": "={{ $json.temperature }}"
+            },
+            {
+              "fieldId": "temperature_unit",
+              "fieldValue": "={{ $json.temperature_unit }}"
+            },
+            {
+              "fieldId": "condition",
+              "fieldValue": "={{ $json.condition }}"
+            },
+            {
+              "fieldId": "humidity",
+              "fieldValue": "={{ $json.humidity }}"
+            },
+            {
+              "fieldId": "wind_speed",
+              "fieldValue": "={{ $json.wind_speed }}"
+            },
+            {
+              "fieldId": "alert_type",
+              "fieldValue": "={{ $json.alert_type }}"
+            },
+            {
+              "fieldId": "raw_response",
+              "fieldValue": "={{ $json.raw_response }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        848,
+        0
+      ],
+      "id": "a29ac8a8-362b-490c-813c-154b93d4a466",
+      "name": "Log to Supabase",
+      "credentials": {
+        "supabaseApi": {
+          "id": "YyDgcgoKE34fHHax",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "weather@n8n.com",
+        "toEmail": "trishankoyedi@gmail.com",
+        "subject": "=Daily Weather for {{ $json.city }} - {{ $now.format('MM-dd-yyyy')}}",
+        "html": "={{ $('Process Logic').item.json.summary }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1072,
+        0
+      ],
+      "id": "cf638c61-598b-499f-83a2-007a5b383308",
+      "name": "Send email",
+      "webhookId": "be26ea74-2839-4058-8696-635737489018",
+      "credentials": {
+        "smtp": {
+          "id": "5Syrqv9Yab20tsQu",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Temp > 32C = Heat Alert\nTemp < 0C = Frost Alert",
+        "height": 80,
+        "width": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        368,
+        -112
+      ],
+      "id": "ed897c01-6247-436b-9c2f-702541ad1219",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        288,
+        368
+      ],
+      "id": "528491af-0f9d-4a16-b493-9e0fe36cfef6",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "content": "Supabase and the HTML Email nodes.",
+        "height": 80,
+        "width": 176
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        896,
+        160
+      ],
+      "id": "add2a9b7-17f7-4383-a1be-cf982ff839b3",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "Weather API and the Logic Code node.",
+        "height": 80,
+        "width": 224
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        480,
+        160
+      ],
+      "id": "d370c0a1-21f9-463f-a972-d1924568f740",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "The Scheduler and City Config nodes.",
+        "height": 80,
+        "width": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        64,
+        160
+      ],
+      "id": "c9c00311-094b-403b-a2d5-71c22a92bd7e",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "jsCode": "const errorData = $json.execution;\nreturn {\n  subject: `🚨 WORKFLOW FAILURE: Weather Automation`,\n  body: `\n  The workflow failed at node: ${errorData.lastNodeExecuted}.<br>Reason: ${errorData.error.message}`\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        368
+      ],
+      "id": "4f06b25e-5230-47c1-adbd-3910c133b90d",
+      "name": "Error processing"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  { json: { target_city: \"College Park\" } },\n  { json: { target_city: \"London\" } },\n  { json: { target_city: \"Hyderabad\" } },\n  { json: { target_city: \"Seattle\" } }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "3fed772f-3d1e-4541-b4b1-eecdbd82c6c5",
+      "name": "Configurable city"
+    },
+    {
+      "parameters": {
+        "fromEmail": "weather@n8n.com",
+        "toEmail": "trishankoyedi@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "html": "=\n {{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        736,
+        368
+      ],
+      "id": "afa55023-bcd4-4159-99db-6415ad20cc5b",
+      "name": "Error email",
+      "webhookId": "be26ea74-2839-4058-8696-635737489018",
+      "credentials": {
+        "smtp": {
+          "id": "5Syrqv9Yab20tsQu",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "cityName": "={{ $json.target_city }}"
+      },
+      "type": "n8n-nodes-base.openWeatherMap",
+      "typeVersion": 1,
+      "position": [
+        416,
+        0
+      ],
+      "id": "9f30b5c0-4aa3-43d3-9100-881b804cdccc",
+      "name": "Fetch Weather",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "openWeatherMapApi": {
+          "id": "SYKjZn193ElJv97G",
+          "name": "OpenWeatherMap account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Error trigger which automatically triggers if there is an issue with the main workflow\n",
+        "height": 96,
+        "width": 224
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        48,
+        496
+      ],
+      "id": "f9fe4e5b-7df5-4df4-a67f-e806a67cfea0",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "Sends an email with critical information to fix the error.",
+        "height": 80,
+        "width": 224
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        832,
+        512
+      ],
+      "id": "1b5b3001-411b-4953-9626-a23a9de6466f",
+      "name": "Sticky Note5"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Configurable city",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Logic": {
+      "main": [
+        [
+          {
+            "node": "Log to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error processing": {
+      "main": [
+        [
+          {
+            "node": "Error email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configurable city": {
+      "main": [
+        [
+          {
+            "node": "Fetch Weather",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Weather": {
+      "main": [
+        [
+          {
+            "node": "Process Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "timezone": "America/New_York",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": -1
+  },
+  "versionId": "84a903fb-698f-44a4-b92b-6c1b16a80833",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "99d3829d397b41d4dae6790af44c5d1e85f2c0a796595e89ccbe54a5e294de97"
+  },
+  "id": "B3AscjWU0fIGHFRb",
+  "tags": []
+}
